@@ -5,11 +5,12 @@ import android.app.Activity
 import android.content.pm.PackageManager
 import android.graphics.*
 import android.media.Image
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
-import android.widget.Toast
+import android.view.MotionEvent
+import android.view.View
+import android.view.ViewTreeObserver
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.*
@@ -17,7 +18,8 @@ import androidx.camera.core.Camera
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import kotlinx.android.synthetic.main.activity_main.*
+import kotlinx.android.synthetic.main.bottomsheet_activity.*
+import kotlinx.android.synthetic.main.content_main_activity.*
 import org.tensorflow.lite.DataType
 import org.tensorflow.lite.Interpreter
 import org.tensorflow.lite.support.common.FileUtil
@@ -31,30 +33,25 @@ import org.tensorflow.lite.support.image.ops.ResizeWithCropOrPadOp
 import org.tensorflow.lite.support.label.TensorLabel
 import org.tensorflow.lite.support.tensorbuffer.TensorBuffer
 import java.io.ByteArrayOutputStream
-import java.io.File
 import java.io.FileInputStream
 import java.io.IOException
 import java.nio.MappedByteBuffer
 import java.nio.channels.FileChannel
-import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import kotlin.math.min
 
 
 class MainActivity : AppCompatActivity() {
     private var preview: Preview? = null
     private var imageCapture: ImageCapture? = null
-    private var imageAnalyzer: ImageAnalysis? = null
     private var camera: Camera? = null
+    private val TAG = "CameraXBasic"
 
-
-    private lateinit var outputDirectory: File
     private lateinit var cameraExecutor: ExecutorService
-    var bitmap:Bitmap?=null
 
     protected var tflite: Interpreter? = null
-    private val tfliteModel: MappedByteBuffer? = null
     private var inputImageBuffer: TensorImage? = null
     private var imageSizeX = 0
     private var imageSizeY = 0
@@ -65,7 +62,7 @@ class MainActivity : AppCompatActivity() {
     private val PROBABILITY_MEAN = 0.0f
     private val PROBABILITY_STD = 255.0f
     private var labels: List<String>? = null
-    //val CAMERA_REQUEST_CODE = 0
+
 
     @RequiresApi(Build.VERSION_CODES.M)
     @androidx.camera.core.ExperimentalGetImage
@@ -85,11 +82,8 @@ class MainActivity : AppCompatActivity() {
             e.printStackTrace()
         }
     }
-    companion object {
-        private const val TAG = "CameraXBasic"
-        private const val FILENAME_FORMAT = "yyyy-MM-dd-HH-mm-ss-SSS"
-    }
-    fun Image.toBitmap(): Bitmap {
+
+    private fun Image.toBitmap(): Bitmap {
         val yBuffer = planes[0].buffer // Y
         val uBuffer = planes[1].buffer // U
         val vBuffer = planes[2].buffer // V
@@ -125,6 +119,42 @@ class MainActivity : AppCompatActivity() {
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                 .build()
 
+
+            viewFinder.afterMeasured {
+                viewFinder.setOnTouchListener { _, event ->
+                    return@setOnTouchListener when (event.action) {
+                        MotionEvent.ACTION_DOWN -> {
+                            true
+                        }
+                        MotionEvent.ACTION_UP -> {
+                            val factory: MeteringPointFactory = SurfaceOrientedMeteringPointFactory(
+                                viewFinder.width.toFloat(), viewFinder.height.toFloat()
+                            )
+                            val autoFocusPoint = factory.createPoint(event.x, event.y)
+                            try {
+                                camera?.cameraControl?.startFocusAndMetering(
+                                    FocusMeteringAction.Builder(
+                                        autoFocusPoint,
+                                        FocusMeteringAction.FLAG_AF
+                                    ).apply {
+                                        //focus only when the user tap the preview
+                                        disableAutoCancel()
+                                    }.build()
+                                )
+                            } catch (e: CameraInfoUnavailableException) {
+                                Log.d("ERROR", "cannot access camera", e)
+                            }
+                            true
+                        }
+                        else -> false // Unhandled event.
+                    }
+                }
+            }
+
+
+
+
+
             imageAnalysis.setAnalyzer(ContextCompat.getMainExecutor(this), ImageAnalysis.Analyzer { image ->
                 val matrix = Matrix()
                 matrix.postRotate(90f)
@@ -138,7 +168,6 @@ class MainActivity : AppCompatActivity() {
                     matrix,
                     true
                 )
-                ivphoto.setImageBitmap(rotatedBitmap)
                 classify( rotatedBitmap)
                 image.close()
 
@@ -155,7 +184,16 @@ class MainActivity : AppCompatActivity() {
         }, ContextCompat.getMainExecutor(this))
 
     }
-
+    inline fun View.afterMeasured(crossinline block: () -> Unit) {
+        viewTreeObserver.addOnGlobalLayoutListener(object : ViewTreeObserver.OnGlobalLayoutListener {
+            override fun onGlobalLayout() {
+                if (measuredWidth > 0 && measuredHeight > 0) {
+                    viewTreeObserver.removeOnGlobalLayoutListener(this)
+                    block()
+                }
+            }
+        })
+    }
     @Throws(IOException::class)
     private fun loadmodelfile(activity: Activity): MappedByteBuffer? {
         val fileDescriptor =
@@ -174,7 +212,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun loadImage(bitmap: Bitmap): TensorImage? {
         inputImageBuffer!!.load(bitmap)
-        val cropSize = Math.min(bitmap!!.width, bitmap.height)
+        val cropSize = min(bitmap.width, bitmap.height)
         val imageProcessor: ImageProcessor = ImageProcessor.Builder()
             .add(ResizeWithCropOrPadOp(cropSize, cropSize))
             .add(ResizeOp(imageSizeX, imageSizeY, ResizeOp.ResizeMethod.NEAREST_NEIGHBOR))
@@ -200,17 +238,29 @@ class MainActivity : AppCompatActivity() {
         val labeledProbability: Map<String, Float> =
             TensorLabel(labels!!.toList(), probabilityProcessor!!.process(outputProbabilityBuffer))
                 .mapWithFloatValue
-        val maxValueInMap =
-            Collections.max(labeledProbability.values)
-        var s=""
+        var v1=0f
+        var s1=""
+        var v2=0f
+        var s2=""
+        var v3=0f
+        var s3=""
         for ((key, value) in labeledProbability) {
-            s+="$key -> $value"
-            s+="\n"
-            Log.i("probabilty",key+" -> "+value)
-            if (value == maxValueInMap) {
-                tvshow.text=key
+            if(value>v1){
+                v1=value
+                s1=key
+            }
+            if(value>v2 && value<v1){
+                v2=value
+                s2=key
+            }
+            if(value>v3 && value<v2){
+                v3=value
+                s3=key
             }
         }
+        tvPokemonName1.text=s1
+        tvPokemonName2.text=s2
+        tvPokemonName3.text=s3
     }
 
     private fun classify(bitmap: Bitmap)
@@ -220,7 +270,7 @@ class MainActivity : AppCompatActivity() {
         val imageShape: IntArray? =
             tflite?.getInputTensor(imageTensorIndex)?.shape() // {1, height, width, 3}
         imageSizeY = imageShape!![1]
-        imageSizeX = imageShape!![2]
+        imageSizeX = imageShape[2]
         val imageDataType: DataType = tflite!!.getInputTensor(imageTensorIndex).dataType()
         val probabilityTensorIndex = 0
         val probabilityShape: IntArray =
@@ -231,10 +281,10 @@ class MainActivity : AppCompatActivity() {
         outputProbabilityBuffer =
             TensorBuffer.createFixedSize(probabilityShape, probabilityDataType)
         probabilityProcessor = TensorProcessor.Builder().add(getPostprocessNormalizeOp()).build()
-        inputImageBuffer = loadImage(bitmap!!)
+        inputImageBuffer = loadImage(bitmap)
         tflite!!.run(
-            inputImageBuffer!!.getBuffer(),
-            outputProbabilityBuffer!!.getBuffer().rewind()
+            inputImageBuffer!!.buffer,
+            outputProbabilityBuffer!!.buffer.rewind()
         )
         showresult()
     }
