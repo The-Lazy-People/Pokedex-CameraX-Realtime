@@ -18,6 +18,7 @@ import androidx.camera.core.Camera
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import com.google.android.material.bottomsheet.BottomSheetBehavior
 import kotlinx.android.synthetic.main.bottomsheet_activity.*
 import kotlinx.android.synthetic.main.content_main_activity.*
 import org.tensorflow.lite.DataType
