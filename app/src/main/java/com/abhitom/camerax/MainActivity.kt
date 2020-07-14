@@ -76,81 +76,18 @@ class MainActivity : AppCompatActivity() {
             requestPermissions(arrayOf(Manifest.permission.CAMERA),1001)
         }
         else{
-
             startCamera()
-            camera_capture_button.setOnClickListener { takePhoto() }
-
-            outputDirectory = getOutputDirectory()
-
             cameraExecutor = Executors.newSingleThreadExecutor()
         }
-
         try {
             tflite = Interpreter(this.loadmodelfile(this)!!)
         } catch (e: Exception) {
             e.printStackTrace()
         }
-
-        //  xyz()
-
     }
     companion object {
         private const val TAG = "CameraXBasic"
         private const val FILENAME_FORMAT = "yyyy-MM-dd-HH-mm-ss-SSS"
-        private const val REQUEST_CODE_PERMISSIONS = 10
-        private val REQUIRED_PERMISSIONS = arrayOf(Manifest.permission.CAMERA)
-    }
-    @androidx.camera.core.ExperimentalGetImage
-    private fun takePhoto() {
-        // Get a stable reference of the modifiable image capture use case
-        val imageCapture = imageCapture ?: return
-        Log.e(TAG, "Photo capture failedno")
-        // Create timestamped output file to hold the image
-        val photoFile = File(
-            outputDirectory,
-            SimpleDateFormat(FILENAME_FORMAT, Locale.US
-            ).format(System.currentTimeMillis()) + ".jpg")
-
-        // Create output options object which contains file + metadata
-        val outputOptions = ImageCapture.OutputFileOptions.Builder(photoFile).build()
-        // Setup image capture listener which is triggered after photo has
-        // been taken
-
-
-//        imageCapture.takePicture(
-//            outputOptions, ContextCompat.getMainExecutor(this), object : ImageCapture.OnImageSavedCallback {
-//                override fun onError(exc: ImageCaptureException) {
-//                    Log.e(TAG, "Photo capture failed: ${exc.message}", exc)
-//                }
-//
-//                override fun onImageSaved(output: ImageCapture.OutputFileResults) {
-//                    val savedUri = Uri.fromFile(photoFile)
-//                    //ivphoto.setImageURI(savedUri)
-//                    //classify(MediaStore.Images.Media.getBitmap(contentResolver, savedUri))
-//                    //val msg = "Photo capture succeeded: $savedUri"
-//                    //Toast.makeText(baseContext, msg, Toast.LENGTH_SHORT).show()
-//                    //Log.d(TAG, msg)
-//                    //deletePhoto(savedUri)
-//                }
-//            })
-    }
-
-    private fun deletePhoto(savedUri: Uri) {
-        val fdelete = File(savedUri.getPath())
-        if (fdelete.exists()) {
-            if (fdelete.delete()) {
-                Toast.makeText(this,"file Deleted :" + savedUri.getPath(),Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(this,"file not Deleted :" + savedUri.getPath(),Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
-
-    fun getOutputDirectory(): File {
-        val mediaDir = externalMediaDirs.firstOrNull()?.let {
-            File(it, resources.getString(R.string.app_name)).apply { mkdirs() } }
-        return if (mediaDir != null && mediaDir.exists())
-            mediaDir else filesDir
     }
     fun Image.toBitmap(): Bitmap {
         val yBuffer = planes[0].buffer // Y
@@ -163,7 +100,6 @@ class MainActivity : AppCompatActivity() {
 
         val nv21 = ByteArray(ySize + uSize + vSize)
 
-        //U and V are swapped
         yBuffer.get(nv21, 0, ySize)
         vBuffer.get(nv21, ySize, vSize)
         uBuffer.get(nv21, ySize + vSize, uSize)
@@ -179,29 +115,20 @@ class MainActivity : AppCompatActivity() {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
 
         cameraProviderFuture.addListener(Runnable {
-            // Used to bind the lifecycle of cameras to the lifecycle owner
             val cameraProvider: ProcessCameraProvider = cameraProviderFuture.get()
 
-            // Preview
             preview = Preview.Builder()
                 .build()
             imageCapture = ImageCapture.Builder()
                 .build()
             val imageAnalysis = ImageAnalysis.Builder()
-                // .setTargetResolution(Size(1280, 720))
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                 .build()
 
             imageAnalysis.setAnalyzer(ContextCompat.getMainExecutor(this), ImageAnalysis.Analyzer { image ->
-                val rotationDegrees = image.imageInfo.rotationDegrees
-                //ivphoto.setImageBitmap(image.image?.toBitmap())
-                //ivphoto.rotation=rotationDegrees+0.0f
                 val matrix = Matrix()
-
                 matrix.postRotate(90f)
-
                 val scaledBitmap = Bitmap.createScaledBitmap(image.image!!.toBitmap(), image.image!!.toBitmap().width, image.image!!.toBitmap().height, true)
-
                 val rotatedBitmap = Bitmap.createBitmap(
                     scaledBitmap,
                     0,
@@ -216,21 +143,15 @@ class MainActivity : AppCompatActivity() {
                 image.close()
 
             })
-            // Select back camera
             val cameraSelector = CameraSelector.Builder().requireLensFacing(CameraSelector.LENS_FACING_BACK).build()
-
-
             try {
-                // Unbind use cases before rebinding
                 cameraProvider.unbindAll()
                 camera = cameraProvider.bindToLifecycle(
                     this, cameraSelector, preview, imageCapture,imageAnalysis)
-                // Bind use cases to camera
                 preview?.setSurfaceProvider(viewFinder.createSurfaceProvider(camera?.cameraInfo))
             } catch(exc: Exception) {
                 Log.e(TAG, "Use case binding failed", exc)
             }
-
         }, ContextCompat.getMainExecutor(this))
 
     }
@@ -252,10 +173,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun loadImage(bitmap: Bitmap): TensorImage? {
-        // Loads bitmap into a TensorImage.
         inputImageBuffer!!.load(bitmap)
-
-        // Creates processor for the TensorImage.
         val cropSize = Math.min(bitmap!!.width, bitmap.height)
         val imageProcessor: ImageProcessor = ImageProcessor.Builder()
             .add(ResizeWithCropOrPadOp(cropSize, cropSize))
@@ -291,8 +209,6 @@ class MainActivity : AppCompatActivity() {
             Log.i("probabilty",key+" -> "+value)
             if (value == maxValueInMap) {
                 tvshow.text=key
-                //else
-                //   tvpokemon.text="Can Not Classify"
             }
         }
     }
