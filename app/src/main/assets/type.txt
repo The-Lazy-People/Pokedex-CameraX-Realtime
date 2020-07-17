@@ -1,0 +1,10 @@
+Flying
+Grass
+Fire
+Dragon
+Flying
+Normal
+Electric
+Psychic
+Flying
+Water

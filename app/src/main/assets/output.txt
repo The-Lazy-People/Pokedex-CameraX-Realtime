@@ -3,7 +3,7 @@ Bulbasaur
 Charmander
 Dratini
 Fearow
-Mewtwo
+Meowth
 Pikachu
 Psyduck
 Spearow

@@ -63,6 +63,7 @@ class MainActivity : AppCompatActivity() {
     private val PROBABILITY_MEAN = 0.0f
     private val PROBABILITY_STD = 255.0f
     private var labels: List<String>? = null
+    private var type: List<String>? = null
 
 
     @RequiresApi(Build.VERSION_CODES.M)
@@ -233,18 +234,26 @@ class MainActivity : AppCompatActivity() {
     private fun showresult() {
         try {
             labels = FileUtil.loadLabels(this, "output.txt")
+            type=FileUtil.loadLabels(this,"type.txt")
         } catch (e: Exception) {
             e.printStackTrace()
         }
-        val labeledProbability: Map<String, Float> =
-            TensorLabel(labels!!.toList(), probabilityProcessor!!.process(outputProbabilityBuffer))
-                .mapWithFloatValue
+        val labeledProbability: Map<String, Float> = TensorLabel(labels!!.toList(), probabilityProcessor!!.process(outputProbabilityBuffer)).mapWithFloatValue;
+        val typedProbability:Map<String,Float> = TensorLabel(type!!.toList(), probabilityProcessor!!.process(outputProbabilityBuffer)).mapWithFloatValue
+        val typer = mutableMapOf<String,String>()
+        for (i in 0..labels!!.size-1){
+            typer[labels!![i]] = type!![i]
+        }
+
         var v1=0f
         var s1=""
+        var t1=""
         var v2=0f
         var s2=""
+        var t2=""
         var v3=0f
         var s3=""
+        var t3=""
         for ((key, value) in labeledProbability) {
             if(value>v1){
                 v1=value
@@ -259,9 +268,23 @@ class MainActivity : AppCompatActivity() {
                 s3=key
             }
         }
+        for ((key, value) in typer) {
+            if(key==s1){
+                t1=value
+            }
+            if(key==s2){
+                t2=value
+            }
+            if(key==s3){
+                t3=value
+            }
+        }
         tvPokemonName1.text=s1
         tvPokemonName2.text=s2
         tvPokemonName3.text=s3
+        tvPokemonType1.text=t1
+        tvPokemonType2.text=t2
+        tvPokemonType3.text=t3
     }
 
     private fun classify(bitmap: Bitmap)
